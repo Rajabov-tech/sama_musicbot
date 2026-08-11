@@ -13,6 +13,11 @@ jobs:
     - name: Repository'ni yuklab olish
       uses: actions/checkout@v4
 
+    - name: FFmpeg'ni o'rnatish (MUHIM!)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+
     - name: Python o'rnatish
       uses: actions/setup-python@v5
       with:
@@ -23,7 +28,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Bot va Web Serverni ishga tushirish
+    - name: Botni ishga tushirish
       env:
         BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
       run: |
