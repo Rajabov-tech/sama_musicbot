@@ -262,7 +262,7 @@ async def handle_text_search(message: Message, state: FSMContext, bot: Bot):
     
     text = f"🎶 Natijalar (1-10):\n\n"
     for i in range(min(10, len(entries))):
-        text += f"{i+1}. {entries[i].get('title', "Noma'lum")}\n"
+        text += f"{i+1}. {entries[i].get('title', 'Nomalum')}\n"
     await message.answer(text, reply_markup=get_search_kb(page=1))
 
 @router.callback_query(SearchState.waiting_for_selection, F.data.startswith("sel_"))
