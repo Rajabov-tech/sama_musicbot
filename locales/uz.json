@@ -1,0 +1,13 @@
+{
+    "welcome": "Assalomu alaykum!\n🎵 Endi siz bot orqali quyidagi imkoniyatlardan foydalana olasiz 👇\n🎶 Musiqa topish:\n🎧 Shazam funksiyasi...\n📥 Video va audio yuklash...",
+    "audio_caption": "@SAMA_Musicbot orqali musiqalarni oson toping va instagram tiktok youtubedan videolarni yuklab oling!",
+    "btn_effects": "🎛 Effekt",
+    "btn_top": "🎵 Top Music",
+    "btn_group": "➕ Guruhga qoʻshish",
+    "btn_bots": "🤖 Supper bots",
+    "btn_back": "🔙 Orqaga",
+    "sub_required": "Botdan foydalanish uchun asosiy kanalimizga obuna bo'ling!",
+    "btn_check_sub": "✅ Obunani tekshirish",
+    "queue_msg": "⏳ Sizning so'rovingiz navbatga qo'shildi. Iltimos kuting...",
+    "downloading": "📥 Media yuklanmoqda..."
+}
