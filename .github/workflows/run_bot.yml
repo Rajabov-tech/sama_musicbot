@@ -1,11 +1,9 @@
-name: Run SAMA Musicbot
+name: Run SAMA Musicbot 24/7
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-  schedule:
-    - cron: '*/30 * * * *' # Har 30 daqiqada qayta tekshirib turadi
 
 jobs:
   build:
@@ -25,8 +23,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Botni fonda ishga tushirish
+    - name: Bot va Web Serverni ishga tushirish
+      env:
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
       run: |
-        nohup python bot.py > bot.log 2>&1 &
-        sleep 5
-        ps aux | grep bot.py
+        python bot.py
