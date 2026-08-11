@@ -1,14 +1,14 @@
 import os
+import requests
 import aiosqlite
 import asyncio
-import yt_dlp
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from services import yt_downloader, stem_separator
+from services import stem_separator
 import database.db as db
 
 AUDIO_CAPTION = "@SAMA_Musicbot orqali musiqalarni oson toping!"
@@ -20,6 +20,31 @@ URL_MAP = {}
 
 class SearchState(StatesGroup):
     waiting_for_selection = State()
+
+# --- COBALT API ORQALI MEDIA LINK OLISH ---
+def get_media_url_from_cobalt(url: str, is_audio: bool = False):
+    api_url = "https://api.cobalt.tools/api/json"
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "url": url,
+        "downloadMode": "audio" if is_audio else "auto",
+        "audioFormat": "mp3" if is_audio else None
+    }
+    try:
+        response = requests.post(api_url, json=payload, headers=headers, timeout=25)
+        data = response.json()
+        if data.get("status") in ["tunnel", "stream", "redirect"]:
+            return {"success": True, "url": data.get("url"), "title": data.get("filename", "Media")}
+        elif data.get("status") == "picker":
+            picker_list = data.get("picker", [])
+            if picker_list:
+                return {"success": True, "url": picker_list[0].get("url"), "title": "Media"}
+    except Exception as e:
+        print(f"Cobalt API xatosi: {e}")
+    return {"success": False, "error": "Cobalt orqali havolani olib bo'lmadi."}
 
 def extract_yt_id(url: str) -> str:
     if not url:
@@ -149,27 +174,25 @@ async def handle_url(message: Message, state: FSMContext):
         return
 
     wait_msg = await message.answer("⏳ Tayyorlanmoqda...")
-    result = await yt_downloader.download_media(url, is_audio=False)
+    result = get_media_url_from_cobalt(url, is_audio=False)
 
     if result["success"]:
-        file_path = result["file_path"]
+        media_url = result["url"]
         title = result.get("title", "Video")
-        duration = result.get("duration", 0)
         
-        sent_msg = await message.answer_video(
-            video=FSInputFile(file_path),
-            caption=VIDEO_CAPTION,
-            duration=int(duration) if duration else None,
-            reply_markup=get_main_video_kb(url)
-        )
-        # Videoni toza url bo'yicha keshga saqlaymiz
-        await db.save_media_cache(url, sent_msg.video.file_id, title, "video")
+        try:
+            sent_msg = await message.answer_video(
+                video=media_url,
+                caption=VIDEO_CAPTION,
+                reply_markup=get_main_video_kb(url)
+            )
+            # Videoni toza url bo'yicha keshga saqlaymiz
+            await db.save_media_cache(url, sent_msg.video.file_id, title, "video")
+        except Exception as e:
+            await message.answer(f"❌ Videoni yuborishda xatolik: {e}")
         
         try: await wait_msg.delete()
         except: pass
-
-        if os.path.exists(file_path):
-            os.remove(file_path)
     else:
         try: await wait_msg.delete()
         except: pass
@@ -206,26 +229,25 @@ async def convert_video_to_audio(callback: CallbackQuery):
     await callback.answer("🎵 Musiqaga o'tkazilmoqda...")
     wait_msg = await callback.message.answer("⏳ Tayyorlanmoqda...")
 
-    result = await yt_downloader.download_media(url, is_audio=True)
+    result = get_media_url_from_cobalt(url, is_audio=True)
 
     if result["success"]:
+        media_url = result["url"]
         title = result.get("title", "Musiqa")
-        duration = result.get("duration", 0)
-        sent_msg = await callback.message.answer_audio(
-            audio=FSInputFile(result["file_path"]),
-            title=title,
-            caption=AUDIO_CAPTION,
-            duration=int(duration) if duration else None,
-            reply_markup=get_main_audio_kb(url)
-        )
-        # Musiqani alohida kesh kaliti bilan saqlaymiz (videoga tegilmaydi)
-        await db.save_media_cache(audio_cache_key, sent_msg.audio.file_id, title, "audio")
+        try:
+            sent_msg = await callback.message.answer_audio(
+                audio=media_url,
+                title=title,
+                caption=AUDIO_CAPTION,
+                reply_markup=get_main_audio_kb(url)
+            )
+            # Musiqani alohida kesh kaliti bilan saqlaymiz (videoga tegilmaydi)
+            await db.save_media_cache(audio_cache_key, sent_msg.audio.file_id, title, "audio")
+        except Exception as e:
+            await callback.message.answer(f"❌ Musiqani yuborishda xatolik: {e}")
         
         try: await wait_msg.delete()
         except: pass
-
-        if os.path.exists(result["file_path"]):
-            os.remove(result["file_path"])
     else:
         try: await wait_msg.delete()
         except: pass
@@ -245,6 +267,7 @@ async def handle_text_search(message: Message, state: FSMContext, bot: Bot):
     wait_msg = await message.answer(f"🔍 \"{query}\" qidirilmoqda...")
 
     def search_youtube(search_term):
+        import yt_dlp
         ydl_opts = {'extract_flat': True, 'quiet': True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             return ydl.extract_info(f"ytsearch20:{search_term}", download=False).get('entries', [])
@@ -287,29 +310,30 @@ async def download_selected_song(callback: CallbackQuery, bot: Bot, state: FSMCo
     except: pass
     
     wait_msg = await callback.message.answer("⏳ Tayyorlanmoqda...")
-    result = await yt_downloader.download_media(video_url, is_audio=True)
+    result = get_media_url_from_cobalt(video_url, is_audio=True)
 
     if result["success"]:
-        title = result.get("title", "Musiqa")
-        duration = result.get("duration", 0)
-        sent_msg = await callback.message.answer_audio(
-            audio=FSInputFile(result["file_path"]), 
-            title=title, 
-            caption=AUDIO_CAPTION, 
-            duration=int(duration) if duration else None,
-            reply_markup=get_main_audio_kb(video_url)
-        )
-        await db.save_media_cache(audio_cache_key, sent_msg.audio.file_id, title, "audio")
+        media_url = result["url"]
+        title = selected_entry.get('title', 'Musiqa')
+        try:
+            sent_msg = await callback.message.answer_audio(
+                audio=media_url, 
+                title=title, 
+                caption=AUDIO_CAPTION, 
+                reply_markup=get_main_audio_kb(video_url)
+            )
+            await db.save_media_cache(audio_cache_key, sent_msg.audio.file_id, title, "audio")
+        except Exception as e:
+            await callback.message.answer(f"❌ Xatolik: {e}")
+            
         await state.clear()
         
         try: await wait_msg.delete()
         except: pass
-
-        if os.path.exists(result["file_path"]): 
-            os.remove(result["file_path"])
     else:
         try: await wait_msg.delete()
         except: pass
+        await callback.message.answer("❌ Musiqani yuklab bo'lmadi.")
 
 @router.callback_query(F.data.startswith("stem_menu_"))
 async def stem_menu_handler(callback: CallbackQuery):
@@ -332,7 +356,6 @@ async def handle_stem_action(callback: CallbackQuery):
             return
     
     is_vocal = (action == 'v')
-    target_name = "Vokal" if is_vocal else "Minusovka"
 
     cached = await db.get_cached_stems(video_url)
     if cached:
@@ -349,17 +372,34 @@ async def handle_stem_action(callback: CallbackQuery):
 
     wait_msg = await callback.message.answer("⏳ Tayyorlanmoqda...")
     
-    result = await yt_downloader.download_media(video_url, is_audio=True)
+    # Stem separator uchun avval audioni yuklab olish kerak
+    result = get_media_url_from_cobalt(video_url, is_audio=True)
     if not result["success"]:
         try: await wait_msg.delete()
         except: pass
         await callback.message.answer("❌ Yuklashda xatolik yuz berdi.")
         return
 
-    title = result.get("title", "Musiqa")
+    import aiohttp
+    temp_file = f"temp_{yt_id}.mp3"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(result["url"]) as resp:
+            if resp.status == 200:
+                with open(temp_file, "wb") as f:
+                    f.write(await resp.read())
+            else:
+                try: await wait_msg.delete()
+                except: pass
+                await callback.message.answer("❌ Faylni yuklab olishda xatolik.")
+                return
+
+    title = "Musiqa"
     safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).strip()
     
-    vocals_path, inst_path = await stem_separator.separate_stems(result["file_path"])
+    vocals_path, inst_path = await stem_separator.separate_stems(temp_file)
+    
+    if os.path.exists(temp_file):
+        os.remove(temp_file)
     
     if vocals_path and inst_path:
         vocal_title_str = f"Vokal [{title}]"
@@ -417,5 +457,3 @@ async def handle_stem_action(callback: CallbackQuery):
         try: await wait_msg.delete()
         except: pass
         await callback.message.answer("❌ AI ajrata olmadi.")
-    
-    if os.path.exists(result["file_path"]): os.remove(result["file_path"])
