@@ -37,6 +37,28 @@ async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
+from flask import Flask
+import threading
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    print("Ping keldi! Bot tirik.")
+    return "SAMA Musicbot is alive!"
+
+def run_web():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = threading.Thread(target=run_web)
+    t.start()
+
+# Botni ishga tushirishdan oldin mana shu funksiyani chaqirasiz:
+if __name__ == '__main__':
+    keep_alive()
+    # Bu yerda sizning asosiy botingizni ishga tushiruvchi kodlaringiz bo'ladi (masalan, asyncio.run(main()) yoki dp.start_polling())
+
 if __name__ == "__main__":
     try:
         asyncio.run(main())
